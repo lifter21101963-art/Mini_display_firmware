@@ -1,0 +1,13 @@
+ui_Screen1.c
+ui.c
+ui_comp_hook.c
+ui_helpers.c
+ui_img_n_bacground_gt7_png.c
+ui_img_fuel_slider_rgb2_png.c
+ui_img_kolo_png.c
+ui_img_arrow_png.c
+fonts/ui_font_big28.c
+fonts/ui_font_big32.c
+fonts/ui_font_big48.c
+fonts/ui_font_big84.c
+fonts/ui_font_Font1.c
