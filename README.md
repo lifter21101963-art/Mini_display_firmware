@@ -11,3 +11,8 @@ Wydzielone moduły projektu:
 - delta: osobny moduł live delta timing,
 - UI: poprawione płynne kolory delty oraz uporządkowane renderowanie ekranu.
 
+## Ostatnie zmiany
+
+W bieżących plikach rozbudowano live delta timing, poprawiono prezentację delty w UI,
+dodano dokładniejsze liczenie paliwa na okrążenie oraz zaktualizowano konfigurację
+PlatformIO dla wyświetlacza LilyGO AMOLED.
