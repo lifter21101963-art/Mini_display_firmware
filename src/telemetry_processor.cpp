@@ -14,6 +14,11 @@ namespace
 fuel_math::FuelState fuelState;
 int lastLapCount = 0;
 bool haveLastLapCount = false;
+
+bool isRaceFinished(const telemetry_parsing::TelemetryFrame &frame)
+{
+    return frame.totalLaps > 0 && frame.lapCount >= frame.totalLaps;
+}
 } // namespace
 
 void resetTelemetryState()
@@ -29,6 +34,14 @@ void processTelemetryFrame(const telemetry_parsing::TelemetryFrame &frame)
     if (!telemetry_parsing::isRaceActive(frame))
     {
         resetTelemetryState();
+        app_ui::clearDeltaDisplay();
+        return;
+    }
+
+    if (isRaceFinished(frame))
+    {
+        resetTelemetryState();
+        app_ui::clearDeltaDisplay();
         return;
     }
 

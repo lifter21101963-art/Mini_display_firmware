@@ -10,6 +10,7 @@ namespace app_ui
 {
 void displayMessage(const String &msg, LilyGo_Class &amoled);
 void showSplashScreen(LilyGo_Class &amoled);
+void clearDeltaDisplay();
 void renderTelemetryDashboard(const TelemetryViewData &view);
 } // namespace app_ui
 

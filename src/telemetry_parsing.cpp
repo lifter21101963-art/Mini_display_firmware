@@ -17,6 +17,7 @@ TelemetryFrame parseTelemetryFrame(const Packet &packet)
     frame.fuelLevel = raw.fuelLevel;
     frame.fuelCapacity = raw.fuelCapacity;
     frame.lapCount = raw.lapCount;
+    frame.totalLaps = raw.totalLaps;
     frame.preRaceNumCars = raw.preRaceNumCars;
 
     frame.position[0] = raw.position[0];

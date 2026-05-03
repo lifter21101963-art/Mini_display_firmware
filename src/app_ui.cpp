@@ -33,6 +33,19 @@ lv_color_t lerpColor(const RgbColor &from, const RgbColor &to, float ratio)
         lerpChannel(from.blue, to.blue, ratio));
 }
 
+lv_opa_t getFadeOpacity(unsigned long phaseMs)
+{
+    constexpr float MIN_OPA = 0.35f;
+    constexpr float MAX_OPA = 1.0f;
+    constexpr float FADE_PERIOD_MS = 1600.0f;
+    constexpr float FADE_TWO_PI = 6.28318530f;
+
+    float angle = ((float)(phaseMs % (unsigned long)FADE_PERIOD_MS) / FADE_PERIOD_MS) * FADE_TWO_PI;
+    float wave = (sinf(angle) + 1.0f) * 0.5f;
+    float opacity = MIN_OPA + (MAX_OPA - MIN_OPA) * wave;
+    return (lv_opa_t)lroundf(opacity * 255.0f);
+}
+
 lv_color_t getDeltaColor(float deltaSeconds)
 {
     constexpr float STRONG_FAST_DELTA = -0.50f;
@@ -108,6 +121,28 @@ void updateTyreTile(int temp, int &lastTemp, lv_obj_t *label, lv_obj_t *tile)
         lv_obj_set_style_bg_color(tile, getTyreColor(temp - 3), LV_PART_MAIN | LV_STATE_DEFAULT);
     }
 }
+
+void renderDeltaDisplay(float deltaSeconds, bool deltaValid)
+{
+    if (!ui_AzimuthAngle)
+    {
+        return;
+    }
+
+    char deltaBuf[16];
+    if (!deltaValid)
+    {
+        snprintf(deltaBuf, sizeof(deltaBuf), "--.--");
+        lv_label_set_text(ui_AzimuthAngle, deltaBuf);
+        lv_obj_set_style_text_color(ui_AzimuthAngle, lv_color_hex(0xF7FF00), 0);
+        lv_obj_set_style_text_opa(ui_AzimuthAngle, getFadeOpacity(millis()), 0);
+        return;
+    }
+
+    snprintf(deltaBuf, sizeof(deltaBuf), "%+.2fs", deltaSeconds);
+    lv_label_set_text(ui_AzimuthAngle, deltaBuf);
+    lv_obj_set_style_text_color(ui_AzimuthAngle, getDeltaColor(deltaSeconds), 0);
+}
 } // namespace
 
 void displayMessage(const String &msg, LilyGo_Class &amoled)
@@ -138,6 +173,11 @@ void showSplashScreen(LilyGo_Class &amoled)
     lv_task_handler();
 }
 
+void clearDeltaDisplay()
+{
+    renderDeltaDisplay(0.0f, false);
+}
+
 void renderTelemetryDashboard(const TelemetryViewData &view)
 {
     static int lastTyreTemps[4] = {-100, -100, -100, -100};
@@ -149,24 +189,30 @@ void renderTelemetryDashboard(const TelemetryViewData &view)
 
     lv_slider_set_value(ui_Slider1, view.fuelLevelMapped, LV_ANIM_OFF);
 
-    int whole = (int)view.lapOnFuel;
-    int fraction = (int)lroundf((view.lapOnFuel - (float)whole) * 100.0f);
-    if (fraction >= 100)
+    bool fuelValueReady = view.fuelPerLap > 0.01f;
+    int whole = 0;
+    int fraction = 0;
+    if (fuelValueReady)
     {
-        whole += 1;
-        fraction = 0;
-    }
-    if (whole > 99)
-    {
-        whole = 99;
-        fraction = 99;
+        whole = (int)view.lapOnFuel;
+        fraction = (int)lroundf((view.lapOnFuel - (float)whole) * 100.0f);
+        if (fraction >= 100)
+        {
+            whole += 1;
+            fraction = 0;
+        }
+        if (whole > 99)
+        {
+            whole = 99;
+            fraction = 99;
+        }
     }
 
-    lv_color_t fuelColor = (whole < 2) ? lv_color_hex(0xff0000) : lv_color_hex(0xF7FF00);
+    lv_color_t fuelColor = lv_color_hex(0xF7FF00);
     lv_opa_t fuelOpacity = LV_OPA_COVER;
-    if (view.fuelLiveEstimate)
+    if (!fuelValueReady || view.fuelLiveEstimate)
     {
-        fuelOpacity = ((millis() / 350UL) % 2UL == 0UL) ? LV_OPA_COVER : LV_OPA_40;
+        fuelOpacity = getFadeOpacity(millis());
     }
 
     lv_obj_set_style_text_color(ui_LAPCOUNTERbase, fuelColor, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -175,40 +221,40 @@ void renderTelemetryDashboard(const TelemetryViewData &view)
     lv_obj_set_style_text_opa(ui_LAPCOUNTERbase1, fuelOpacity, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_AVGfuel, fuelOpacity, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    char buf[4];
-    char buf1[4];
-    snprintf(buf, sizeof(buf), ",%02d", fraction);
-    snprintf(buf1, sizeof(buf1), "%02d", whole);
+    char buf[5];
+    char buf1[5];
+    if (!fuelValueReady)
+    {
+        snprintf(buf, sizeof(buf), ",--");
+        snprintf(buf1, sizeof(buf1), "--");
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), ",%02d", fraction);
+        snprintf(buf1, sizeof(buf1), "%02d", whole);
+    }
     lv_label_set_text(ui_LAPCOUNTERbase, buf1);
     lv_label_set_text(ui_LAPCOUNTERbase1, buf);
 
     char fuelPerLapBuf[12];
-    snprintf(fuelPerLapBuf, sizeof(fuelPerLapBuf), "%.2f", roundf(view.fuelPerLap * 100.0f) / 100.0f);
-    for (size_t i = 0; i < sizeof(fuelPerLapBuf); ++i)
+    if (!fuelValueReady)
     {
-        if (fuelPerLapBuf[i] == '.')
+        snprintf(fuelPerLapBuf, sizeof(fuelPerLapBuf), "-,--");
+    }
+    else
+    {
+        snprintf(fuelPerLapBuf, sizeof(fuelPerLapBuf), "%.2f", roundf(view.fuelPerLap * 100.0f) / 100.0f);
+        for (size_t i = 0; i < sizeof(fuelPerLapBuf); ++i)
         {
-            fuelPerLapBuf[i] = ',';
-            break;
+            if (fuelPerLapBuf[i] == '.')
+            {
+                fuelPerLapBuf[i] = ',';
+                break;
+            }
         }
     }
     lv_label_set_text(ui_AVGfuel, fuelPerLapBuf);
 
-    if (ui_AzimuthAngle)
-    {
-        char deltaBuf[16];
-        if (!view.deltaValid)
-        {
-            snprintf(deltaBuf, sizeof(deltaBuf), "--.--");
-            lv_label_set_text(ui_AzimuthAngle, deltaBuf);
-            lv_obj_set_style_text_color(ui_AzimuthAngle, lv_color_hex(0x505050), 0);
-        }
-        else
-        {
-            snprintf(deltaBuf, sizeof(deltaBuf), "%+.2fs", view.deltaSeconds);
-            lv_label_set_text(ui_AzimuthAngle, deltaBuf);
-            lv_obj_set_style_text_color(ui_AzimuthAngle, getDeltaColor(view.deltaSeconds), 0);
-        }
-    }
+    renderDeltaDisplay(view.deltaSeconds, view.deltaValid);
 }
 } // namespace app_ui
