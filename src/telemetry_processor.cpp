@@ -65,6 +65,7 @@ void processTelemetryFrame(const telemetry_parsing::TelemetryFrame &frame)
     view.fuelLevelMapped = fuelSnapshot.fuelLevelMapped;
     view.fuelPerLap = fuelSnapshot.fuelPerLap;
     view.lapOnFuel = fuelSnapshot.lapOnFuel;
+    view.fuelLiveEstimate = fuelSnapshot.liveEstimate;
     view.deltaSeconds = deltaSnapshot.deltaSeconds;
     view.deltaValid = deltaSnapshot.valid;
 

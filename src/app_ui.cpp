@@ -163,18 +163,35 @@ void renderTelemetryDashboard(const TelemetryViewData &view)
     }
 
     lv_color_t fuelColor = (whole < 2) ? lv_color_hex(0xff0000) : lv_color_hex(0xF7FF00);
+    lv_opa_t fuelOpacity = LV_OPA_COVER;
+    if (view.fuelLiveEstimate)
+    {
+        fuelOpacity = ((millis() / 350UL) % 2UL == 0UL) ? LV_OPA_COVER : LV_OPA_40;
+    }
+
     lv_obj_set_style_text_color(ui_LAPCOUNTERbase, fuelColor, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_color(ui_LAPCOUNTERbase1, fuelColor, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_LAPCOUNTERbase, fuelOpacity, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_LAPCOUNTERbase1, fuelOpacity, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_AVGfuel, fuelOpacity, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     char buf[4];
     char buf1[4];
-    snprintf(buf, sizeof(buf), "%02d", fraction);
+    snprintf(buf, sizeof(buf), ",%02d", fraction);
     snprintf(buf1, sizeof(buf1), "%02d", whole);
     lv_label_set_text(ui_LAPCOUNTERbase, buf1);
     lv_label_set_text(ui_LAPCOUNTERbase1, buf);
 
     char fuelPerLapBuf[12];
     snprintf(fuelPerLapBuf, sizeof(fuelPerLapBuf), "%.2f", roundf(view.fuelPerLap * 100.0f) / 100.0f);
+    for (size_t i = 0; i < sizeof(fuelPerLapBuf); ++i)
+    {
+        if (fuelPerLapBuf[i] == '.')
+        {
+            fuelPerLapBuf[i] = ',';
+            break;
+        }
+    }
     lv_label_set_text(ui_AVGfuel, fuelPerLapBuf);
 
     if (ui_AzimuthAngle)

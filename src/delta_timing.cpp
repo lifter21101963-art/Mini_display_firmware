@@ -2,13 +2,16 @@
 
 #include <Arduino.h>
 #include <math.h>
+#include <esp_heap_caps.h>
 
 namespace delta_timing
 {
 namespace
 {
-constexpr size_t LIVE_DELTA_MAX_SAMPLES = 2048;
+constexpr size_t LIVE_DELTA_MAX_SAMPLES = 8192;
 constexpr float DELTA_SMOOTHING_ALPHA = 0.15f;
+constexpr uint32_t REFERENCE_LAP_MIN_MS = 30000UL;
+constexpr float REFERENCE_LAP_MIN_DISTANCE = 500.0f;
 
 struct LapSample
 {
@@ -16,18 +19,66 @@ struct LapSample
     uint32_t elapsedMs;
 };
 
-LapSample currentLapSamples[LIVE_DELTA_MAX_SAMPLES];
-LapSample referenceLapSamples[LIVE_DELTA_MAX_SAMPLES];
+LapSample *currentLapSamples = nullptr;
+LapSample *referenceLapSamples = nullptr;
 size_t currentLapSampleCount = 0;
 size_t referenceLapSampleCount = 0;
 float currentLapDistance = 0.0f;
 float currentSmoothedDelta = 0.0f;
 uint32_t currentLapStartMs = 0;
+bool haveSmoothedDelta = false;
 bool haveLastTrackPosition = false;
 float lastTrackX = 0.0f;
 float lastTrackY = 0.0f;
 float lastTrackZ = 0.0f;
 bool liveDeltaArmed = false;
+bool buffersReady = false;
+bool buffersAttempted = false;
+
+bool ensureBuffers()
+{
+    if (buffersReady)
+    {
+        return true;
+    }
+
+    if (buffersAttempted)
+    {
+        return false;
+    }
+    buffersAttempted = true;
+
+    const size_t bufferBytes = LIVE_DELTA_MAX_SAMPLES * sizeof(LapSample);
+
+    currentLapSamples = static_cast<LapSample *>(heap_caps_malloc(bufferBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (currentLapSamples == nullptr)
+    {
+        currentLapSamples = static_cast<LapSample *>(heap_caps_malloc(bufferBytes, MALLOC_CAP_8BIT));
+    }
+
+    referenceLapSamples = static_cast<LapSample *>(heap_caps_malloc(bufferBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (referenceLapSamples == nullptr)
+    {
+        referenceLapSamples = static_cast<LapSample *>(heap_caps_malloc(bufferBytes, MALLOC_CAP_8BIT));
+    }
+
+    buffersReady = (currentLapSamples != nullptr && referenceLapSamples != nullptr);
+    if (!buffersReady)
+    {
+        if (currentLapSamples != nullptr)
+        {
+            heap_caps_free(currentLapSamples);
+            currentLapSamples = nullptr;
+        }
+        if (referenceLapSamples != nullptr)
+        {
+            heap_caps_free(referenceLapSamples);
+            referenceLapSamples = nullptr;
+        }
+    }
+
+    return buffersReady;
+}
 
 void resetCurrentLapTracking()
 {
@@ -36,6 +87,7 @@ void resetCurrentLapTracking()
     haveLastTrackPosition = false;
     currentLapStartMs = millis();
     currentSmoothedDelta = 0.0f;
+    haveSmoothedDelta = false;
 }
 
 void resetLiveDeltaTracking()
@@ -46,6 +98,11 @@ void resetLiveDeltaTracking()
 
 void captureCurrentLapAsReference()
 {
+    if (!ensureBuffers())
+    {
+        return;
+    }
+
     referenceLapSampleCount = currentLapSampleCount;
     for (size_t i = 0; i < currentLapSampleCount; ++i)
     {
@@ -55,6 +112,11 @@ void captureCurrentLapAsReference()
 
 void appendLapSample(float distance, uint32_t elapsedMs)
 {
+    if (!ensureBuffers())
+    {
+        return;
+    }
+
     if (currentLapSampleCount >= LIVE_DELTA_MAX_SAMPLES)
     {
         return;
@@ -74,6 +136,11 @@ void appendLapSample(float distance, uint32_t elapsedMs)
 
 bool getReferenceTimeAtDistance(float distance, float &referenceTimeMs)
 {
+    if (!ensureBuffers())
+    {
+        return false;
+    }
+
     if (referenceLapSampleCount < 2)
     {
         return false;
@@ -106,13 +173,13 @@ bool getReferenceTimeAtDistance(float distance, float &referenceTimeMs)
         }
     }
 
-    referenceTimeMs = (float)referenceLapSamples[referenceLapSampleCount - 1].elapsedMs;
-    return true;
+    return false;
 }
 } // namespace
 
 void reset()
 {
+    ensureBuffers();
     resetLiveDeltaTracking();
     resetCurrentLapTracking();
 }
@@ -124,7 +191,11 @@ void onLapChange(int lapDelta)
         return;
     }
 
-    if (currentLapSampleCount >= 2)
+    uint32_t lapElapsedMs = millis() - currentLapStartMs;
+    if (lapDelta == 1 &&
+        lapElapsedMs >= REFERENCE_LAP_MIN_MS &&
+        currentLapDistance >= REFERENCE_LAP_MIN_DISTANCE &&
+        currentLapSampleCount >= 2)
     {
         captureCurrentLapAsReference();
         liveDeltaArmed = true;
@@ -136,6 +207,11 @@ void onLapChange(int lapDelta)
 DeltaSnapshot update(float currentX, float currentY, float currentZ)
 {
     DeltaSnapshot snapshot{};
+
+    if (!ensureBuffers())
+    {
+        return snapshot;
+    }
 
     if (!haveLastTrackPosition)
     {
@@ -170,7 +246,15 @@ DeltaSnapshot update(float currentX, float currentY, float currentZ)
         if (getReferenceTimeAtDistance(currentLapDistance, referenceTimeMs))
         {
             float rawDeltaSeconds = ((float)currentLapElapsedMs - referenceTimeMs) / 1000.0f;
-            currentSmoothedDelta = (currentSmoothedDelta * (1.0f - DELTA_SMOOTHING_ALPHA)) + (rawDeltaSeconds * DELTA_SMOOTHING_ALPHA);
+            if (haveSmoothedDelta)
+            {
+                currentSmoothedDelta = (currentSmoothedDelta * (1.0f - DELTA_SMOOTHING_ALPHA)) + (rawDeltaSeconds * DELTA_SMOOTHING_ALPHA);
+            }
+            else
+            {
+                currentSmoothedDelta = rawDeltaSeconds;
+                haveSmoothedDelta = true;
+            }
             snapshot.deltaSeconds = currentSmoothedDelta;
             snapshot.valid = true;
         }

@@ -7,6 +7,7 @@ struct TelemetryViewData
     int fuelLevelMapped;
     float fuelPerLap;
     float lapOnFuel;
+    bool fuelLiveEstimate;
     float deltaSeconds;
     bool deltaValid;
 };

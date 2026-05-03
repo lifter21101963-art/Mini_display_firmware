@@ -8,9 +8,10 @@ struct FuelState
     float lapStartFuel = -1.0f;
     float lastFuelLevel = -1.0f;
     float fuelPerLap = 0.0f;
-    float lapSamples[5] = {};
+    float totalFuelPerLap = 0.0f;
     int lapSampleCount = 0;
-    int nextLapSample = 0;
+    unsigned long lapStartMs = 0;
+    float averageLapMs = 0.0f;
 };
 
 struct FuelSnapshot
@@ -18,6 +19,7 @@ struct FuelSnapshot
     int fuelLevelMapped = 0;
     float lapOnFuel = 0.0f;
     float fuelPerLap = 0.0f;
+    bool liveEstimate = false;
 };
 
 void reset(FuelState &state);

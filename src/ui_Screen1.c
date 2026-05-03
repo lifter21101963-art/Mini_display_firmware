@@ -247,7 +247,7 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_width(ui_LAPCOUNTERshadow1, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_LAPCOUNTERshadow1, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(ui_LAPCOUNTERshadow1, 21);
-    lv_obj_set_y(ui_LAPCOUNTERshadow1, 28);
+    lv_obj_set_y(ui_LAPCOUNTERshadow1, 24);
     lv_obj_set_align(ui_LAPCOUNTERshadow1, LV_ALIGN_CENTER);
     lv_label_set_text(ui_LAPCOUNTERshadow1, "00");
     lv_obj_add_flag(ui_LAPCOUNTERshadow1, LV_OBJ_FLAG_HIDDEN);     /// Flags
@@ -259,12 +259,12 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_width(ui_LAPCOUNTERbase1, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_LAPCOUNTERbase1, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(ui_LAPCOUNTERbase1, 19);
-    lv_obj_set_y(ui_LAPCOUNTERbase1, 26);
+    lv_obj_set_y(ui_LAPCOUNTERbase1, 22);
     lv_obj_set_align(ui_LAPCOUNTERbase1, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_LAPCOUNTERbase1, "00");
+    lv_label_set_text(ui_LAPCOUNTERbase1, ",00");
     lv_obj_set_style_text_color(ui_LAPCOUNTERbase1, lv_color_hex(0xF7FF00), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_LAPCOUNTERbase1, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_LAPCOUNTERbase1, &ui_font_big32, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_LAPCOUNTERbase1, &ui_font_big48, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_AVGfuel = lv_label_create(ui_Screen1);
     lv_obj_set_width(ui_AVGfuel, LV_SIZE_CONTENT);   /// 1
