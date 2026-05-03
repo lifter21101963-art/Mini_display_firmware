@@ -1,6 +1,9 @@
 #ifndef TELEMETRY_VIEW_H
 #define TELEMETRY_VIEW_H
 
+constexpr int DELTA_HISTORY_SLOTS = 5;
+constexpr int DELTA_MARKER_COUNT = 6;
+
 struct TelemetryViewData
 {
     int tyreTemps[4];
@@ -10,6 +13,10 @@ struct TelemetryViewData
     bool fuelLiveEstimate;
     float deltaSeconds;
     bool deltaValid;
+    uint32_t deltaHistoryColors[DELTA_HISTORY_SLOTS];
+    bool deltaHistoryValid[DELTA_HISTORY_SLOTS];
+    uint32_t liveDeltaColor = 0;
+    bool liveDeltaValid = false;
 };
 
 #endif

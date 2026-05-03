@@ -12,6 +12,7 @@ struct TelemetryFrame
     float fuelCapacity;
     int lapCount;
     int totalLaps;
+    int lastLaptime;
     int preRaceNumCars;
     float position[3];
     float rotation[4];

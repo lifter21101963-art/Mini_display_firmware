@@ -11,6 +11,8 @@ namespace app_ui
 namespace
 {
 lv_obj_t *messageLabel = nullptr;
+lv_obj_t *deltaHistoryMarkers[DELTA_MARKER_COUNT] = {nullptr};
+bool deltaHistoryUiReady = false;
 
 struct RgbColor
 {
@@ -31,6 +33,14 @@ lv_color_t lerpColor(const RgbColor &from, const RgbColor &to, float ratio)
         lerpChannel(from.red, to.red, ratio),
         lerpChannel(from.green, to.green, ratio),
         lerpChannel(from.blue, to.blue, ratio));
+}
+
+lv_color_t fromPackedColor(uint32_t packedColor)
+{
+    uint8_t red = (uint8_t)((packedColor >> 16) & 0xFF);
+    uint8_t green = (uint8_t)((packedColor >> 8) & 0xFF);
+    uint8_t blue = (uint8_t)(packedColor & 0xFF);
+    return lv_color_make(red, green, blue);
 }
 
 lv_opa_t getFadeOpacity(unsigned long phaseMs)
@@ -142,8 +152,68 @@ void renderDeltaDisplay(float deltaSeconds, bool deltaValid)
     snprintf(deltaBuf, sizeof(deltaBuf), "%+.2fs", deltaSeconds);
     lv_label_set_text(ui_AzimuthAngle, deltaBuf);
     lv_obj_set_style_text_color(ui_AzimuthAngle, getDeltaColor(deltaSeconds), 0);
+    lv_obj_set_style_text_opa(ui_AzimuthAngle, LV_OPA_COVER, 0);
+}
+
+void ensureDeltaHistoryUi()
+{
+    if (deltaHistoryUiReady || !ui_Screen1)
+    {
+        return;
+    }
+
+    constexpr int markerSize = 20;
+    constexpr int markerTopMargin = 12;
+    constexpr int markerBottomMargin = 12;
+    constexpr int markerX = 243;
+    lv_color_t baseMarkerColor = lv_color_hex(0x404040);
+    constexpr int usableHeight = 240 - markerTopMargin - markerBottomMargin;
+    constexpr int markerStep = (usableHeight - markerSize) / (DELTA_MARKER_COUNT - 1);
+
+    for (int i = 0; i < DELTA_MARKER_COUNT; ++i)
+    {
+        deltaHistoryMarkers[i] = lv_obj_create(ui_Screen1);
+        lv_obj_clear_flag(deltaHistoryMarkers[i], LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_size(deltaHistoryMarkers[i], markerSize, markerSize);
+        lv_obj_set_align(deltaHistoryMarkers[i], LV_ALIGN_CENTER);
+        lv_obj_set_x(deltaHistoryMarkers[i], markerX);
+        lv_obj_set_y(deltaHistoryMarkers[i], -120 + markerTopMargin + (i * markerStep) + (markerSize / 2));
+        lv_obj_set_style_radius(deltaHistoryMarkers[i], LV_RADIUS_CIRCLE, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_width(deltaHistoryMarkers[i], 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_pad_all(deltaHistoryMarkers[i], 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(deltaHistoryMarkers[i], LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(deltaHistoryMarkers[i], baseMarkerColor, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_move_foreground(deltaHistoryMarkers[i]);
+    }
+
+    deltaHistoryUiReady = true;
+}
+
+void renderDeltaHistory(const TelemetryViewData &view)
+{
+    ensureDeltaHistoryUi();
+    if (!deltaHistoryUiReady)
+    {
+        return;
+    }
+
+    for (int i = 0; i < DELTA_HISTORY_SLOTS; ++i)
+    {
+        lv_color_t markerColor = view.deltaHistoryValid[i] ? fromPackedColor(view.deltaHistoryColors[i]) : lv_color_hex(0x404040);
+        lv_obj_set_style_bg_color(deltaHistoryMarkers[i], markerColor, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(deltaHistoryMarkers[i], LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+
+    lv_color_t liveColor = view.liveDeltaValid ? fromPackedColor(view.liveDeltaColor) : lv_color_hex(0x404040);
+    lv_obj_set_style_bg_color(deltaHistoryMarkers[DELTA_MARKER_COUNT - 1], liveColor, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(deltaHistoryMarkers[DELTA_MARKER_COUNT - 1], LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
 }
 } // namespace
+
+void initializeDeltaHistory()
+{
+    ensureDeltaHistoryUi();
+}
 
 void displayMessage(const String &msg, LilyGo_Class &amoled)
 {
@@ -256,5 +326,6 @@ void renderTelemetryDashboard(const TelemetryViewData &view)
     lv_label_set_text(ui_AVGfuel, fuelPerLapBuf);
 
     renderDeltaDisplay(view.deltaSeconds, view.deltaValid);
+    renderDeltaHistory(view);
 }
 } // namespace app_ui

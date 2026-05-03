@@ -56,6 +56,7 @@ void setup()
     gt7Telem.begin(psIP);
     gt7Telem.sendHeartbeat();
     ui_init();
+    app_ui::initializeDeltaHistory();
 
     telemetry::resetTelemetryState();
     wind_heading::reset(windState);
