@@ -6,6 +6,9 @@
 
 namespace update_manager
 {
+constexpr char DEFAULT_UPDATE_SOURCE_URL[] = "https://github.com/lifter21101963-art/Mini_display_firmware";
+constexpr char DEFAULT_UPDATE_ASSET_NAME[] = "merged-firmware.bin";
+
 struct UpdateSettings
 {
     bool enabled = false;

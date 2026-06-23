@@ -97,6 +97,14 @@ bool loadWiFiCredentials(String &ssid, String &password)
 void handleRoot()
 {
     update_manager::loadSettings(updateSettings);
+    if (updateSettings.manifestUrl.length() == 0)
+    {
+        updateSettings.manifestUrl = update_manager::DEFAULT_UPDATE_SOURCE_URL;
+    }
+    if (updateSettings.assetName.length() == 0)
+    {
+        updateSettings.assetName = update_manager::DEFAULT_UPDATE_ASSET_NAME;
+    }
 
     String page = html_head;
     page += "<div class='box'><h2>GT7 Telemetry - Konfiguracja</h2>";
@@ -144,6 +152,14 @@ void handleSave()
     updateSettings.assetName = assetName;
     updateSettings.manifestUrl.trim();
     updateSettings.assetName.trim();
+    if (updateSettings.manifestUrl.length() == 0)
+    {
+        updateSettings.manifestUrl = update_manager::DEFAULT_UPDATE_SOURCE_URL;
+    }
+    if (updateSettings.assetName.length() == 0)
+    {
+        updateSettings.assetName = update_manager::DEFAULT_UPDATE_ASSET_NAME;
+    }
     update_manager::saveSettings(updateSettings);
 
     String resp = html_head;

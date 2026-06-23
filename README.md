@@ -16,7 +16,7 @@ Wydzielone moduły projektu:
 Projekt ma teraz prosty mechanizm automatycznych aktualizacji firmware po Wi-Fi.
 
 - W portalu Wi-Fi można zapisać adres manifestu aktualizacji i włączyć auto-check.
-- Możesz też wkleić adres repozytorium GitHub, a urządzenie samo przejdzie do `releases/latest`.
+- Domyślnie portal już ma wpisane Twoje repozytorium GitHub, a urządzenie samo przejdzie do `releases/latest`.
 - Manifest może być JSON-em albo prostym tekstem z polami `version=` i `bin_url=`.
 - Gdy urządzenie wykryje nowszą wersję, pobierze binarkę i wykona restart po udanym OTA.
 - W portalu jest też przycisk `OTA`, który ręcznie odpala sprawdzanie aktualizacji.
