@@ -10,20 +10,12 @@ namespace
 constexpr float FUEL_SAMPLE_MIN = 0.10f;
 constexpr float FUEL_SAMPLE_MAX = 100.0f;
 constexpr float REFUEL_DETECT_THRESHOLD = 2.0f;
-constexpr float LIVE_ESTIMATE_MIN_PROGRESS = 0.25f;
-constexpr float LIVE_ESTIMATE_MAX_PROGRESS = 0.95f;
+constexpr float EMA_ALPHA = 0.30f;
 constexpr unsigned long FUEL_LAP_MIN_MS = 30000UL;
 
 float roundToTwoDecimals(float value)
 {
     return roundf(value * 100.0f) / 100.0f;
-}
-
-void clearLapSamples(FuelState &state)
-{
-    // Keep fuelPerLap so range can use the previous stint average until a new sample is ready.
-    state.totalFuelPerLap = 0.0f;
-    state.lapSampleCount = 0;
 }
 
 void setLapBaseline(FuelState &state, float fuelLevel)
@@ -33,31 +25,42 @@ void setLapBaseline(FuelState &state, float fuelLevel)
     state.lapStartMs = millis();
 }
 
-void addLapSample(FuelState &state, float usedPerLap)
+void updateAverageLapTime(FuelState &state, unsigned long lapTimeMs)
 {
-    state.totalFuelPerLap += usedPerLap;
-    state.lapSampleCount++;
-    state.fuelPerLap = state.totalFuelPerLap / (float)state.lapSampleCount;
-}
-
-void updateAverageLapTime(FuelState &state, unsigned long lapElapsedMs, int lapDelta)
-{
-    if (lapDelta != 1 || lapElapsedMs < 30000UL)
+    if (lapTimeMs < FUEL_LAP_MIN_MS)
     {
         return;
     }
 
     if (state.averageLapMs <= 0.0f)
     {
-        state.averageLapMs = (float)lapElapsedMs;
+        state.averageLapMs = (float)lapTimeMs;
     }
     else
     {
-        state.averageLapMs = state.averageLapMs * 0.70f + (float)lapElapsedMs * 0.30f;
+        state.averageLapMs = state.averageLapMs * (1.0f - EMA_ALPHA) + (float)lapTimeMs * EMA_ALPHA;
     }
 }
 
-float getLiveFuelPerLapEstimate(const FuelState &state, float fuelLevel)
+void updateConsumptionAverage(FuelState &state, float exactFuelThisLap)
+{
+    if (exactFuelThisLap <= FUEL_SAMPLE_MIN || exactFuelThisLap > FUEL_SAMPLE_MAX)
+    {
+        return;
+    }
+
+    if (state.lapSampleCount == 0)
+    {
+        state.fuelPerLap = exactFuelThisLap;
+        state.lapSampleCount = 1;
+        return;
+    }
+
+    state.fuelPerLap = state.fuelPerLap * (1.0f - EMA_ALPHA) + exactFuelThisLap * EMA_ALPHA;
+    state.lapSampleCount++;
+}
+
+float getLiveEstimate(const FuelState &state, float fuelLevel)
 {
     if (state.averageLapMs <= 0.0f || state.lapStartFuel < 0.0f)
     {
@@ -66,18 +69,18 @@ float getLiveFuelPerLapEstimate(const FuelState &state, float fuelLevel)
 
     unsigned long elapsedMs = millis() - state.lapStartMs;
     float progress = (float)elapsedMs / state.averageLapMs;
-    if (progress < LIVE_ESTIMATE_MIN_PROGRESS || progress > LIVE_ESTIMATE_MAX_PROGRESS)
+    if (progress < 0.20f || progress > 0.98f)
     {
         return 0.0f;
     }
 
-    float used = state.lapStartFuel - fuelLevel;
-    if (used <= FUEL_SAMPLE_MIN)
+    float usedSinceLapStart = state.lapStartFuel - fuelLevel;
+    if (usedSinceLapStart <= FUEL_SAMPLE_MIN)
     {
         return 0.0f;
     }
 
-    float estimate = used / progress;
+    float estimate = usedSinceLapStart / progress;
     if (estimate <= FUEL_SAMPLE_MIN || estimate > FUEL_SAMPLE_MAX)
     {
         return 0.0f;
@@ -92,9 +95,10 @@ void reset(FuelState &state)
     state.lapStartFuel = -1.0f;
     state.lastFuelLevel = -1.0f;
     state.fuelPerLap = 0.0f;
+    state.lapSampleCount = 0;
     state.lapStartMs = 0;
     state.averageLapMs = 0.0f;
-    clearLapSamples(state);
+    state.refueling = false;
 }
 
 void beginLap(FuelState &state, float fuelLevel)
@@ -102,6 +106,7 @@ void beginLap(FuelState &state, float fuelLevel)
     if (fuelLevel >= 0.0f)
     {
         setLapBaseline(state, fuelLevel);
+        state.refueling = false;
     }
 }
 
@@ -118,9 +123,18 @@ void update(FuelState &state, float fuelLevel)
         return;
     }
 
-    if (state.lastFuelLevel >= 0.0f && fuelLevel > state.lastFuelLevel + REFUEL_DETECT_THRESHOLD)
+    if (fuelLevel > state.lastFuelLevel + REFUEL_DETECT_THRESHOLD)
     {
-        clearLapSamples(state);
+        state.refueling = true;
+        state.lapStartFuel = fuelLevel;
+        state.lapStartMs = millis();
+        state.lastFuelLevel = fuelLevel;
+        return;
+    }
+
+    if (state.refueling && fuelLevel <= state.lastFuelLevel)
+    {
+        state.refueling = false;
         setLapBaseline(state, fuelLevel);
         return;
     }
@@ -128,20 +142,12 @@ void update(FuelState &state, float fuelLevel)
     state.lastFuelLevel = fuelLevel;
 }
 
-void onLapChange(FuelState &state, float fuelAfter, int lapDelta)
+void onLapChange(FuelState &state, float fuelAfter, int lapDelta, int lapTimeMs)
 {
-    if (lapDelta <= 0)
+    if (lapDelta <= 0 || fuelAfter < 0.0f)
     {
         return;
     }
-
-    if (fuelAfter < 0.0f)
-    {
-        return;
-    }
-
-    unsigned long lapElapsedMs = millis() - state.lapStartMs;
-    updateAverageLapTime(state, lapElapsedMs, lapDelta);
 
     if (state.lapStartFuel < 0.0f)
     {
@@ -149,28 +155,34 @@ void onLapChange(FuelState &state, float fuelAfter, int lapDelta)
         return;
     }
 
-    if (state.lastFuelLevel >= 0.0f && fuelAfter > state.lastFuelLevel + REFUEL_DETECT_THRESHOLD)
+    if (lapTimeMs <= 0)
     {
-        clearLapSamples(state);
+        lapTimeMs = (int)(millis() - state.lapStartMs);
+    }
+
+    updateAverageLapTime(state, (unsigned long)lapTimeMs);
+
+    if (state.refueling || fuelAfter > state.lastFuelLevel + REFUEL_DETECT_THRESHOLD)
+    {
+        state.refueling = false;
         setLapBaseline(state, fuelAfter);
         return;
     }
 
-    float used = state.lapStartFuel - fuelAfter;
-    if (lapDelta != 1 || lapElapsedMs < FUEL_LAP_MIN_MS || used <= FUEL_SAMPLE_MIN || used > FUEL_SAMPLE_MAX)
+    float exactFuelThisLap = state.lapStartFuel - fuelAfter;
+    if (exactFuelThisLap <= FUEL_SAMPLE_MIN || exactFuelThisLap > FUEL_SAMPLE_MAX)
     {
         setLapBaseline(state, fuelAfter);
         return;
     }
 
-    float usedPerLap = used / (float)lapDelta;
-    if (usedPerLap <= FUEL_SAMPLE_MIN || usedPerLap > FUEL_SAMPLE_MAX)
+    if (lapDelta == 1 && lapTimeMs < (int)FUEL_LAP_MIN_MS)
     {
         setLapBaseline(state, fuelAfter);
         return;
     }
 
-    addLapSample(state, usedPerLap);
+    updateConsumptionAverage(state, exactFuelThisLap / (float)lapDelta);
     setLapBaseline(state, fuelAfter);
 }
 
@@ -188,10 +200,10 @@ FuelSnapshot evaluate(const FuelState &state, float fuelLevel, float fuelCapacit
     }
 
     float fuelPerLapForDisplay = state.fuelPerLap;
-    if (fuelPerLapForDisplay <= 0.01f)
+    if (fuelPerLapForDisplay <= FUEL_SAMPLE_MIN)
     {
-        float liveEstimate = getLiveFuelPerLapEstimate(state, fuelLevel);
-        if (liveEstimate > 0.01f)
+        float liveEstimate = getLiveEstimate(state, fuelLevel);
+        if (liveEstimate > FUEL_SAMPLE_MIN)
         {
             fuelPerLapForDisplay = liveEstimate;
             snapshot.liveEstimate = true;
@@ -199,7 +211,7 @@ FuelSnapshot evaluate(const FuelState &state, float fuelLevel, float fuelCapacit
     }
 
     snapshot.fuelPerLap = roundToTwoDecimals(fuelPerLapForDisplay);
-    if (fuelPerLapForDisplay > 0.01f)
+    if (fuelPerLapForDisplay > FUEL_SAMPLE_MIN)
     {
         snapshot.lapOnFuel = roundToTwoDecimals(constrain(fuelLevel / fuelPerLapForDisplay, 0.0f, 99.0f));
     }

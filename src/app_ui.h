@@ -5,6 +5,7 @@
 #include <LilyGo_AMOLED.h>
 
 #include "telemetry_view.h"
+#include "battery_status.h"
 
 namespace app_ui
 {
@@ -12,6 +13,11 @@ void displayMessage(const String &msg, LilyGo_Class &amoled);
 void showSplashScreen(LilyGo_Class &amoled);
 void initializeDeltaHistory();
 void clearDeltaDisplay();
+void initializeBatteryStatus();
+void initializeUpdateControls();
+bool takeManualUpdateRequest();
+void renderBatteryStatus(const battery_status::BatterySnapshot &battery);
+void renderTelemetryWaiting();
 void renderTelemetryDashboard(const TelemetryViewData &view);
 } // namespace app_ui
 

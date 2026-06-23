@@ -34,6 +34,79 @@ float lastTrackZ = 0.0f;
 bool liveDeltaArmed = false;
 bool buffersReady = false;
 bool buffersAttempted = false;
+int32_t previousCompletedLapTimeMs = -1;
+bool havePreviousCompletedLapTimeMs = false;
+uint32_t deltaHistoryColors[DELTA_HISTORY_SLOTS] = {};
+bool deltaHistoryValid[DELTA_HISTORY_SLOTS] = {};
+
+uint32_t deltaColorToRgb888(float deltaSeconds)
+{
+    constexpr float STRONG_FAST_DELTA = -0.50f;
+    constexpr float NEUTRAL_DELTA = 0.0f;
+    constexpr float STRONG_SLOW_DELTA = 0.50f;
+
+    uint8_t red = 0;
+    uint8_t green = 0;
+    uint8_t blue = 0;
+
+    if (deltaSeconds <= STRONG_FAST_DELTA)
+    {
+        red = 0xB0;
+        green = 0x00;
+        blue = 0xFF;
+    }
+    else if (deltaSeconds < NEUTRAL_DELTA)
+    {
+        float ratio = (deltaSeconds - STRONG_FAST_DELTA) / (NEUTRAL_DELTA - STRONG_FAST_DELTA);
+        red = (uint8_t)lroundf((float)0x00 + ((float)0xFF - 0x00) * ratio);
+        green = 0xFF;
+        blue = (uint8_t)lroundf((float)0x00 + ((float)0xFF - 0x00) * ratio);
+    }
+    else if (deltaSeconds >= STRONG_SLOW_DELTA)
+    {
+        red = 0xFF;
+        green = 0x00;
+        blue = 0x00;
+    }
+    else
+    {
+        float ratio = deltaSeconds / STRONG_SLOW_DELTA;
+        red = 0xFF;
+        green = (uint8_t)lroundf((float)0xFF + ((float)0x00 - 0xFF) * ratio);
+        blue = 0x00;
+    }
+
+    return ((uint32_t)red << 16) | ((uint32_t)green << 8) | (uint32_t)blue;
+}
+
+void clearDeltaHistory()
+{
+    for (int i = 0; i < DELTA_HISTORY_SLOTS; ++i)
+    {
+        deltaHistoryColors[i] = 0;
+        deltaHistoryValid[i] = false;
+    }
+}
+
+void shiftDeltaHistoryUp(uint32_t color, bool valid)
+{
+    for (int i = 0; i < DELTA_HISTORY_SLOTS - 1; ++i)
+    {
+        deltaHistoryColors[i] = deltaHistoryColors[i + 1];
+        deltaHistoryValid[i] = deltaHistoryValid[i + 1];
+    }
+    deltaHistoryColors[DELTA_HISTORY_SLOTS - 1] = color;
+    deltaHistoryValid[DELTA_HISTORY_SLOTS - 1] = valid;
+}
+
+void copyDeltaHistory(DeltaSnapshot &snapshot)
+{
+    for (int i = 0; i < DELTA_HISTORY_SLOTS; ++i)
+    {
+        snapshot.historyColors[i] = deltaHistoryColors[i];
+        snapshot.historyValid[i] = deltaHistoryValid[i];
+    }
+}
 
 bool ensureBuffers()
 {
@@ -94,6 +167,9 @@ void resetLiveDeltaTracking()
 {
     referenceLapSampleCount = 0;
     liveDeltaArmed = false;
+    previousCompletedLapTimeMs = -1;
+    havePreviousCompletedLapTimeMs = false;
+    clearDeltaHistory();
 }
 
 void captureCurrentLapAsReference()
@@ -184,11 +260,26 @@ void reset()
     resetCurrentLapTracking();
 }
 
-void onLapChange(int lapDelta)
+void onLapChange(int lapDelta, int32_t completedLapTimeMs)
 {
     if (lapDelta <= 0)
     {
         return;
+    }
+
+    if (lapDelta == 1)
+    {
+        uint32_t lapColor = 0x404040;
+        bool lapColorValid = false;
+        if (completedLapTimeMs > 0 && havePreviousCompletedLapTimeMs && previousCompletedLapTimeMs > 0)
+        {
+            float lapDeltaSeconds = ((float)completedLapTimeMs - (float)previousCompletedLapTimeMs) / 1000.0f;
+            lapColor = deltaColorToRgb888(lapDeltaSeconds);
+            lapColorValid = true;
+        }
+        shiftDeltaHistoryUp(lapColor, lapColorValid);
+        previousCompletedLapTimeMs = completedLapTimeMs;
+        havePreviousCompletedLapTimeMs = true;
     }
 
     uint32_t lapElapsedMs = millis() - currentLapStartMs;
@@ -207,6 +298,7 @@ void onLapChange(int lapDelta)
 DeltaSnapshot update(float currentX, float currentY, float currentZ)
 {
     DeltaSnapshot snapshot{};
+    copyDeltaHistory(snapshot);
 
     if (!ensureBuffers())
     {
@@ -257,6 +349,8 @@ DeltaSnapshot update(float currentX, float currentY, float currentZ)
             }
             snapshot.deltaSeconds = currentSmoothedDelta;
             snapshot.valid = true;
+            snapshot.liveColor = deltaColorToRgb888(snapshot.deltaSeconds);
+            snapshot.liveColorValid = true;
         }
     }
 

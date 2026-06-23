@@ -4,6 +4,8 @@
 #include <math.h>
 #include "ui.h"
 
+#include "update_manager.h"
+
 extern const lv_img_dsc_t logo;
 
 namespace app_ui
@@ -12,7 +14,18 @@ namespace
 {
 lv_obj_t *messageLabel = nullptr;
 lv_obj_t *deltaHistoryMarkers[DELTA_MARKER_COUNT] = {nullptr};
+lv_obj_t *batteryLabel = nullptr;
+lv_obj_t *batteryBar = nullptr;
+lv_obj_t *batteryFill = nullptr;
+lv_obj_t *updateButton = nullptr;
 bool deltaHistoryUiReady = false;
+bool manualUpdateRequested = false;
+constexpr int BATTERY_BAR_X = 526;
+constexpr int BATTERY_BAR_Y = 12;
+constexpr int UPDATE_BUTTON_X = -230;
+constexpr int UPDATE_BUTTON_Y = -96;
+constexpr int UPDATE_BUTTON_W = 58;
+constexpr int UPDATE_BUTTON_H = 26;
 
 struct RgbColor
 {
@@ -165,7 +178,7 @@ void ensureDeltaHistoryUi()
     constexpr int markerSize = 20;
     constexpr int markerTopMargin = 12;
     constexpr int markerBottomMargin = 12;
-    constexpr int markerX = 243;
+    constexpr int markerX = 233;
     lv_color_t baseMarkerColor = lv_color_hex(0x404040);
     constexpr int usableHeight = 240 - markerTopMargin - markerBottomMargin;
     constexpr int markerStep = (usableHeight - markerSize) / (DELTA_MARKER_COUNT - 1);
@@ -208,11 +221,97 @@ void renderDeltaHistory(const TelemetryViewData &view)
     lv_obj_set_style_bg_color(deltaHistoryMarkers[DELTA_MARKER_COUNT - 1], liveColor, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(deltaHistoryMarkers[DELTA_MARKER_COUNT - 1], LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
 }
+
+void ensureBatteryStatusUi()
+{
+    if (batteryLabel || batteryBar || batteryFill || !ui_Screen1)
+    {
+        return;
+    }
+
+    batteryLabel = lv_label_create(ui_Screen1);
+    lv_obj_set_width(batteryLabel, 1);
+    lv_label_set_long_mode(batteryLabel, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_align(batteryLabel, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(batteryLabel, &lv_font_montserrat_32, 0);
+    lv_obj_set_style_text_color(batteryLabel, lv_color_hex(0xF7FF00), 0);
+    lv_obj_set_pos(batteryLabel, BATTERY_BAR_X, BATTERY_BAR_Y);
+    lv_obj_add_flag(batteryLabel, LV_OBJ_FLAG_HIDDEN);
+
+    batteryBar = lv_obj_create(ui_Screen1);
+    lv_obj_set_size(batteryBar, 12, 42);
+    lv_obj_clear_flag(batteryBar, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_radius(batteryBar, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(batteryBar, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_color(batteryBar, lv_color_hex(0x404040), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(batteryBar, lv_color_hex(0x101010), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(batteryBar, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_flag(batteryBar, LV_OBJ_FLAG_HIDDEN);
+
+    batteryFill = lv_obj_create(batteryBar);
+    lv_obj_clear_flag(batteryFill, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_radius(batteryFill, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(batteryFill, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(batteryFill, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(batteryFill, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_pos(batteryBar, BATTERY_BAR_X, BATTERY_BAR_Y);
+    lv_obj_add_flag(batteryLabel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(batteryFill, LV_OBJ_FLAG_HIDDEN);
+}
+
+void onUpdateButtonEvent(lv_event_t *e)
+{
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED)
+    {
+        manualUpdateRequested = true;
+    }
+}
+
+void ensureUpdateControls()
+{
+    if (updateButton || !ui_Screen1)
+    {
+        return;
+    }
+
+    updateButton = lv_btn_create(ui_Screen1);
+    lv_obj_set_size(updateButton, UPDATE_BUTTON_W, UPDATE_BUTTON_H);
+    lv_obj_set_pos(updateButton, UPDATE_BUTTON_X, UPDATE_BUTTON_Y);
+    lv_obj_clear_flag(updateButton, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_radius(updateButton, 8, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(updateButton, lv_color_hex(0x1473FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(updateButton, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(updateButton, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_event_cb(updateButton, onUpdateButtonEvent, LV_EVENT_CLICKED, nullptr);
+
+    lv_obj_t *label = lv_label_create(updateButton);
+    lv_label_set_text(label, "OTA");
+    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_center(label);
+}
 } // namespace
 
 void initializeDeltaHistory()
 {
     ensureDeltaHistoryUi();
+}
+
+void initializeBatteryStatus()
+{
+    ensureBatteryStatusUi();
+}
+
+void initializeUpdateControls()
+{
+    ensureUpdateControls();
+}
+
+bool takeManualUpdateRequest()
+{
+    bool requested = manualUpdateRequested;
+    manualUpdateRequested = false;
+    return requested;
 }
 
 void displayMessage(const String &msg, LilyGo_Class &amoled)
@@ -248,15 +347,37 @@ void clearDeltaDisplay()
     renderDeltaDisplay(0.0f, false);
 }
 
-void renderTelemetryDashboard(const TelemetryViewData &view)
+void renderBatteryStatus(const battery_status::BatterySnapshot &battery)
 {
-    static int lastTyreTemps[4] = {-100, -100, -100, -100};
+    ensureBatteryStatusUi();
+    if (!batteryLabel || !batteryBar || !batteryFill)
+    {
+        return;
+    }
 
-    updateTyreTile(view.tyreTemps[0], lastTyreTemps[0], ui_FLTIRETEMPwhite, ui_LFtire);
-    updateTyreTile(view.tyreTemps[1], lastTyreTemps[1], ui_FRTIRETEMPwhite, ui_RFtire);
-    updateTyreTile(view.tyreTemps[2], lastTyreTemps[2], ui_RLTIRETEMPwhite, ui_LRtire);
-    updateTyreTile(view.tyreTemps[3], lastTyreTemps[3], ui_RRTIRETEMPwhite, ui_RRtire);
+    int innerHeight = 36;
+    int fillHeight = (int)lroundf((float)innerHeight * constrain((float)battery.percent / 100.0f, 0.0f, 1.0f));
+    if (fillHeight < 2)
+    {
+        fillHeight = 2;
+    }
 
+    lv_obj_set_size(batteryFill, 8, fillHeight);
+    lv_obj_set_style_bg_color(
+        batteryFill,
+        battery.percent <= 10 ? lv_color_hex(0xFF3B30)
+                              : battery.percent <= 35 ? lv_color_hex(0xFFB000)
+                                                      : battery.charging ? lv_color_hex(0x00D084) : lv_color_hex(0xF7FF00),
+        LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_add_flag(batteryLabel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(batteryBar, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(batteryFill, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(batteryBar);
+}
+
+void renderFuelDisplay(const TelemetryViewData &view)
+{
     lv_slider_set_value(ui_Slider1, view.fuelLevelMapped, LV_ANIM_OFF);
 
     bool fuelValueReady = view.fuelPerLap > 0.01f;
@@ -324,6 +445,28 @@ void renderTelemetryDashboard(const TelemetryViewData &view)
         }
     }
     lv_label_set_text(ui_AVGfuel, fuelPerLapBuf);
+}
+
+void renderTelemetryWaiting()
+{
+    TelemetryViewData view{};
+    renderFuelDisplay(view);
+    renderDeltaDisplay(0.0f, false);
+    renderDeltaHistory(view);
+    ensureUpdateControls();
+}
+
+void renderTelemetryDashboard(const TelemetryViewData &view)
+{
+    ensureUpdateControls();
+    static int lastTyreTemps[4] = {-100, -100, -100, -100};
+
+    updateTyreTile(view.tyreTemps[0], lastTyreTemps[0], ui_FLTIRETEMPwhite, ui_LFtire);
+    updateTyreTile(view.tyreTemps[1], lastTyreTemps[1], ui_FRTIRETEMPwhite, ui_RFtire);
+    updateTyreTile(view.tyreTemps[2], lastTyreTemps[2], ui_RLTIRETEMPwhite, ui_LRtire);
+    updateTyreTile(view.tyreTemps[3], lastTyreTemps[3], ui_RRTIRETEMPwhite, ui_RRtire);
+
+    renderFuelDisplay(view);
 
     renderDeltaDisplay(view.deltaSeconds, view.deltaValid);
     renderDeltaHistory(view);

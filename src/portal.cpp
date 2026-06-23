@@ -9,6 +9,8 @@
 #include <WiFiUdp.h>
 
 #include "app_ui.h"
+#include "update_manager.h"
+#include "version.h"
 
 namespace portal
 {
@@ -25,6 +27,7 @@ DNSServer dnsServer;
 WiFiUDP discoveryUdp;
 String wifi_ssid;
 String wifi_pass;
+update_manager::UpdateSettings updateSettings;
 
 const String html_head =
     "<!DOCTYPE html><html><head><meta charset='utf-8'>"
@@ -39,6 +42,38 @@ const String html_head =
     "</style></head><body>";
 
 const String html_footer = "</body></html>";
+
+String escapeHtml(const String &input)
+{
+    String output;
+    output.reserve(input.length() + 16);
+    for (size_t i = 0; i < input.length(); ++i)
+    {
+        char c = input[i];
+        switch (c)
+        {
+        case '&':
+            output += "&amp;";
+            break;
+        case '<':
+            output += "&lt;";
+            break;
+        case '>':
+            output += "&gt;";
+            break;
+        case '"':
+            output += "&quot;";
+            break;
+        case '\'':
+            output += "&#39;";
+            break;
+        default:
+            output += c;
+            break;
+        }
+    }
+    return output;
+}
 
 } // namespace
 
@@ -61,14 +96,29 @@ bool loadWiFiCredentials(String &ssid, String &password)
 
 void handleRoot()
 {
+    update_manager::loadSettings(updateSettings);
+
     String page = html_head;
-    page += "<div class='box'><h2>GT7 Telemetry - Konfiguracja Wi-Fi</h2>";
+    page += "<div class='box'><h2>GT7 Telemetry - Konfiguracja</h2>";
+    page += "<p style='font-size:12px;color:#999;margin:0 0 10px 0;'>Wersja firmware: " + String(APP_VERSION) + "</p>";
     page += "<form action='/save' method='POST'>";
-    page += "<input name='ssid' placeholder='Nazwa sieci Wi-Fi' value='" + wifi_ssid + "'><br>";
+    page += "<h3 style='margin:18px 0 10px 0;'>Wi-Fi</h3>";
+    page += "<input name='ssid' placeholder='Nazwa sieci Wi-Fi' value='" + escapeHtml(wifi_ssid) + "'><br>";
     page += "<input name='pass' placeholder='Haslo Wi-Fi' type='password' value=''><br>";
-    page += "<button type='submit'>Zapisz</button>";
+    page += "<h3 style='margin:18px 0 10px 0;'>Aktualizacje</h3>";
+    page += "<input name='manifest_url' placeholder='URL manifestu lub repo GitHub' value='" + escapeHtml(updateSettings.manifestUrl) + "'><br>";
+    page += "<input name='asset_name' placeholder='Nazwa assetu .bin' value='" + escapeHtml(updateSettings.assetName) + "'><br>";
+    page += "<label style='display:block;margin:8px 0 12px 0;font-size:14px;'><input type='checkbox' name='auto_update' value='1' ";
+    if (updateSettings.enabled)
+    {
+        page += "checked";
+    }
+    page += "> Automatycznie sprawdzaj aktualizacje po polaczeniu z Wi-Fi</label>";
+    page += "<button type='submit'>Zapisz ustawienia</button>";
     page += "</form>";
     page += "<p style='font-size:12px;color:#999;margin-top:12px;'>Po zapisaniu ESP sie zrestartuje i polaczy z twoja siecia.</p>";
+    page += "<p style='font-size:12px;color:#999;margin-top:6px;'>Mozesz wpisac adres repo GitHub, /releases/latest albo URL manifestu.</p>";
+    page += "<p style='font-size:12px;color:#999;margin-top:6px;'>Domyslna nazwa assetu to merged-firmware.bin.</p>";
     page += "</div>";
     page += html_footer;
     server.send(200, "text/html", page);
@@ -78,6 +128,9 @@ void handleSave()
 {
     String ssid = server.arg("ssid");
     String pass = server.arg("pass");
+    String manifestUrl = server.arg("manifest_url");
+    String assetName = server.arg("asset_name");
+    bool autoUpdateEnabled = server.hasArg("auto_update");
 
     if (ssid.length() == 0)
     {
@@ -86,6 +139,12 @@ void handleSave()
     }
 
     saveWiFiCredentials(ssid, pass);
+    updateSettings.enabled = autoUpdateEnabled;
+    updateSettings.manifestUrl = manifestUrl;
+    updateSettings.assetName = assetName;
+    updateSettings.manifestUrl.trim();
+    updateSettings.assetName.trim();
+    update_manager::saveSettings(updateSettings);
 
     String resp = html_head;
     resp += "<div class='box'><h2>Zapisano ustawienia.</h2><p>Restartuje urzadzenie...</p></div>";

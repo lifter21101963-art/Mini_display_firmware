@@ -1,7 +1,8 @@
 #ifndef TELEMETRY_VIEW_H
 #define TELEMETRY_VIEW_H
 
-constexpr int DELTA_HISTORY_SLOTS = 5;
+#include "delta_timing.h"
+
 constexpr int DELTA_MARKER_COUNT = 6;
 
 struct TelemetryViewData

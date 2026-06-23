@@ -5,16 +5,20 @@
 #include "ui.h"
 
 #include "app_ui.h"
+#include "battery_status.h"
 #include "delta_timing.h"
 #include "portal.h"
+#include "update_manager.h"
 #include "telemetry_parsing.h"
 #include "telemetry_processor.h"
 #include "wind_heading.h"
 
 constexpr int CALIB_BUTTON = 0; // GPIO0 / BOOT
 constexpr unsigned long HEARTBEAT_INTERVAL_MS = 500;
+constexpr unsigned long BATTERY_STATUS_INTERVAL_MS = 2000;
 
 unsigned long previousHeartbeatMs = 0;
+unsigned long previousBatteryStatusMs = 0;
 
 GT7_UDP_Parser gt7Telem;
 LilyGo_Class amoled;
@@ -46,6 +50,7 @@ void setup()
     }
 
     portal::connectWiFiWithUI(amoled);
+    update_manager::checkForUpdate(amoled);
 
     IPAddress psIP;
     while (psIP == IPAddress(0, 0, 0, 0))
@@ -57,9 +62,12 @@ void setup()
     gt7Telem.sendHeartbeat();
     ui_init();
     app_ui::initializeDeltaHistory();
+    app_ui::initializeBatteryStatus();
+    app_ui::initializeUpdateControls();
 
     telemetry::resetTelemetryState();
     wind_heading::reset(windState);
+    app_ui::renderBatteryStatus(battery_status::read(amoled));
 }
 
 void loop()
@@ -86,9 +94,20 @@ void loop()
     wind_heading::updateArrow(windState, azimuth);
     telemetry::processTelemetryFrame(frame);
 
+    if (millis() - previousBatteryStatusMs >= BATTERY_STATUS_INTERVAL_MS)
+    {
+        previousBatteryStatusMs = millis();
+        app_ui::renderBatteryStatus(battery_status::read(amoled));
+    }
+
     if (millis() - previousHeartbeatMs >= HEARTBEAT_INTERVAL_MS)
     {
         previousHeartbeatMs = millis();
         gt7Telem.sendHeartbeat();
+    }
+
+    if (app_ui::takeManualUpdateRequest())
+    {
+        update_manager::checkForUpdate(amoled);
     }
 }
