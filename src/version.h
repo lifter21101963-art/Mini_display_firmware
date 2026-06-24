@@ -1,6 +1,6 @@
 #ifndef APP_VERSION_H
 #define APP_VERSION_H
 
-constexpr const char APP_VERSION[] = "0.2.5";
+constexpr const char APP_VERSION[] = "0.2.6";
 
 #endif

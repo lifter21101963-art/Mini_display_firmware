@@ -520,6 +520,12 @@ bool checkForUpdate(LilyGo_Class &amoled)
     Serial.println(binUrl);
     Serial.print("[OTA] tag_name: ");
     Serial.println(releaseTag);
+    String desiredAssetName = manifestAssetName.length() > 0 ? manifestAssetName : settings.assetName;
+    if (desiredAssetName.length() == 0)
+    {
+        desiredAssetName = DEFAULT_GITHUB_ASSET_NAME;
+    }
+
     if (binUrl.length() == 0 && browserDownloadUrl.length() > 0)
     {
         binUrl = browserDownloadUrl;
@@ -533,6 +539,15 @@ bool checkForUpdate(LilyGo_Class &amoled)
         binUrl = extractValue(manifest, "url");
     }
 
+    if (releaseTag.length() > 0 && repoPath.length() > 0 && desiredAssetName.length() > 0)
+    {
+        String exactAssetUrl = buildGitHubAssetUrl(repoPath, releaseTag, desiredAssetName);
+        if (exactAssetUrl.length() > 0)
+        {
+            binUrl = exactAssetUrl;
+        }
+    }
+
     if (remoteVersion.length() == 0 || binUrl.length() == 0)
     {
         if (releaseTag.length() == 0)
@@ -540,12 +555,7 @@ bool checkForUpdate(LilyGo_Class &amoled)
             releaseTag = extractValue(manifest, "name");
         }
         remoteVersion = releaseTag;
-        String expectedAssetName = manifestAssetName.length() > 0 ? manifestAssetName : settings.assetName;
-        if (expectedAssetName.length() == 0)
-        {
-            expectedAssetName = DEFAULT_GITHUB_ASSET_NAME;
-        }
-        binUrl = buildGitHubAssetUrl(repoPath, releaseTag, expectedAssetName);
+        binUrl = buildGitHubAssetUrl(repoPath, releaseTag, desiredAssetName);
         Serial.print("[OTA] derived version from tag_name: ");
         Serial.println(remoteVersion);
     }
@@ -554,6 +564,8 @@ bool checkForUpdate(LilyGo_Class &amoled)
     binUrl.trim();
     Serial.print("[OTA] normalized version: ");
     Serial.println(remoteVersion);
+    Serial.print("[OTA] desired asset: ");
+    Serial.println(desiredAssetName);
     Serial.print("[OTA] final binUrl: ");
     Serial.println(binUrl);
 

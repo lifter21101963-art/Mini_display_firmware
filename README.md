@@ -36,8 +36,8 @@ Repo ma workflow, który przy tagu `v*` buduje firmware i publikuje GitHub Relea
 Przykład:
 
 ```text
-git tag v0.2.5
-git push origin v0.2.5
+git tag v0.2.6
+git push origin v0.2.6
 ```
 
 Workflow opublikuje release z plikiem `merged-firmware.bin`.
@@ -45,7 +45,7 @@ Workflow opublikuje release z plikiem `merged-firmware.bin`.
 Przykład prostego manifestu:
 
 ```text
-version=0.2.5
+version=0.2.6
 bin_url=https://twoj-serwer.pl/gt7_v2_project/firmware.bin
 ```
 
