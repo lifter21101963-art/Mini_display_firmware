@@ -126,7 +126,7 @@ void handleRoot()
     page += "</form>";
     page += "<p style='font-size:12px;color:#999;margin-top:12px;'>Po zapisaniu ESP sie zrestartuje i polaczy z twoja siecia.</p>";
     page += "<p style='font-size:12px;color:#999;margin-top:6px;'>Mozesz wpisac adres repo GitHub, /releases/latest albo URL manifestu.</p>";
-    page += "<p style='font-size:12px;color:#999;margin-top:6px;'>Domyslna nazwa assetu to merged-firmware.bin.</p>";
+    page += "<p style='font-size:12px;color:#999;margin-top:6px;'>Domyslna nazwa assetu OTA to firmware.bin. merged-firmware.bin zostaje tylko do pelnego flashowania.</p>";
     page += "</div>";
     page += html_footer;
     server.send(200, "text/html", page);

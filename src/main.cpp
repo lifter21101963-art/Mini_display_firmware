@@ -51,6 +51,7 @@ void setup()
 
     portal::connectWiFiWithUI(amoled);
     update_manager::checkForUpdate(amoled);
+    delay(500);
 
     IPAddress psIP;
     while (psIP == IPAddress(0, 0, 0, 0))
@@ -63,7 +64,6 @@ void setup()
     ui_init();
     app_ui::initializeDeltaHistory();
     app_ui::initializeBatteryStatus();
-    app_ui::initializeUpdateControls();
 
     telemetry::resetTelemetryState();
     wind_heading::reset(windState);
@@ -104,10 +104,5 @@ void loop()
     {
         previousHeartbeatMs = millis();
         gt7Telem.sendHeartbeat();
-    }
-
-    if (app_ui::takeManualUpdateRequest())
-    {
-        update_manager::checkForUpdate(amoled);
     }
 }

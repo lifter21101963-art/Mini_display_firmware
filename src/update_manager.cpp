@@ -23,6 +23,18 @@ constexpr char DEFAULT_GITHUB_ASSET_NAME[] = "merged-firmware.bin";
 
 Preferences preferences;
 
+bool isHttpsUrl(const String &url)
+{
+    if (url.length() < 8)
+    {
+        return false;
+    }
+
+    String scheme = url.substring(0, 8);
+    scheme.toLowerCase();
+    return scheme == "https://";
+}
+
 String trimVersionToken(String value)
 {
     value.trim();
@@ -37,12 +49,15 @@ String normalizeReleaseUrl(String url)
 {
     url.trim();
 
-    if (url.startsWith("https://api.github.com/repos/") || url.startsWith("http://api.github.com/repos/"))
+    String lowerUrl = url;
+    lowerUrl.toLowerCase();
+
+    if (lowerUrl.startsWith("https://api.github.com/repos/") || lowerUrl.startsWith("http://api.github.com/repos/"))
     {
         return url;
     }
 
-    if (url.startsWith("https://github.com/") || url.startsWith("http://github.com/"))
+    if (lowerUrl.startsWith("https://github.com/") || lowerUrl.startsWith("http://github.com/"))
     {
         int schemeEnd = url.indexOf("://");
         int hostEnd = url.indexOf('/', schemeEnd + 3);
@@ -76,6 +91,44 @@ String normalizeReleaseUrl(String url)
     }
 
     return url;
+}
+
+String extractGitHubRepoPath(const String &url)
+{
+    String normalized = url;
+    normalized.trim();
+
+    int schemePos = normalized.indexOf("://");
+    int pathStart = schemePos >= 0 ? normalized.indexOf('/', schemePos + 3) : normalized.indexOf('/');
+    if (pathStart < 0 || pathStart + 1 >= (int)normalized.length())
+    {
+        return "";
+    }
+
+    String path = normalized.substring(pathStart + 1);
+    if (path.startsWith("repos/"))
+    {
+        path = path.substring(6);
+    }
+
+    int firstSlash = path.indexOf('/');
+    if (firstSlash < 0)
+    {
+        return "";
+    }
+
+    int secondSlash = path.indexOf('/', firstSlash + 1);
+    String owner = path.substring(0, firstSlash);
+    String repo = secondSlash >= 0 ? path.substring(firstSlash + 1, secondSlash) : path.substring(firstSlash + 1);
+    owner.trim();
+    repo.trim();
+
+    if (owner.length() == 0 || repo.length() == 0)
+    {
+        return "";
+    }
+
+    return owner + "/" + repo;
 }
 
 String extractValue(const String &text, const String &key)
@@ -140,81 +193,20 @@ String extractValue(const String &text, const String &key)
     return "";
 }
 
-String extractGithubAssetUrl(const String &text, const String &expectedName)
+String buildGitHubAssetUrl(const String &repoPath, const String &tag, const String &assetName)
 {
-    int searchPos = 0;
-
-    while (true)
+    if (repoPath.length() == 0 || tag.length() == 0 || assetName.length() == 0)
     {
-        int keyPos = text.indexOf("\"browser_download_url\"", searchPos);
-        if (keyPos < 0)
-        {
-            break;
-        }
-
-        int colonPos = text.indexOf(':', keyPos);
-        if (colonPos < 0)
-        {
-            break;
-        }
-
-        String assetName;
-        int nameKeyPos = text.lastIndexOf("\"name\"", keyPos);
-        if (nameKeyPos >= 0)
-        {
-            int nameColonPos = text.indexOf(':', nameKeyPos);
-            if (nameColonPos >= 0 && nameColonPos < keyPos)
-            {
-                int nameStart = nameColonPos + 1;
-                while (nameStart < keyPos && isspace((unsigned char)text[nameStart]))
-                {
-                    ++nameStart;
-                }
-                if (nameStart < keyPos && text[nameStart] == '"')
-                {
-                    ++nameStart;
-                    int nameEnd = nameStart;
-                    while (nameEnd < keyPos && text[nameEnd] != '"')
-                    {
-                        ++nameEnd;
-                    }
-                    assetName = text.substring(nameStart, nameEnd);
-                    assetName.trim();
-                }
-            }
-        }
-
-        int start = colonPos + 1;
-        while (start < (int)text.length() && isspace((unsigned char)text[start]))
-        {
-            ++start;
-        }
-
-        if (start >= (int)text.length() || text[start] != '"')
-        {
-            searchPos = colonPos + 1;
-            continue;
-        }
-
-        ++start;
-        int end = start;
-        while (end < (int)text.length() && text[end] != '"')
-        {
-            ++end;
-        }
-
-        String candidate = text.substring(start, end);
-        candidate.trim();
-
-        if (expectedName.length() == 0 || assetName.equalsIgnoreCase(expectedName))
-        {
-            return candidate;
-        }
-
-        searchPos = end + 1;
+        return "";
     }
 
-    return "";
+    String url = "https://github.com/";
+    url += repoPath;
+    url += "/releases/download/";
+    url += tag;
+    url += "/";
+    url += assetName;
+    return url;
 }
 
 bool readHttpText(const String &url, String &body)
@@ -224,7 +216,7 @@ bool readHttpText(const String &url, String &body)
     HTTPClient http;
 
     WiFiClient *transport = &client;
-    if (url.startsWith("https://"))
+    if (isHttpsUrl(url))
     {
         secureClient.setInsecure();
         transport = &secureClient;
@@ -235,7 +227,9 @@ bool readHttpText(const String &url, String &body)
         return false;
     }
 
-    http.setTimeout(15000);
+    http.setTimeout(30000);
+    http.useHTTP10(true);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     http.addHeader("User-Agent", GITHUB_USER_AGENT);
     http.addHeader("Accept", "application/vnd.github+json");
     int code = http.GET();
@@ -311,7 +305,7 @@ bool flashFirmware(const String &binUrl, LilyGo_Class &amoled)
     HTTPClient http;
 
     WiFiClient *transport = &client;
-    if (binUrl.startsWith("https://"))
+    if (isHttpsUrl(binUrl))
     {
         secureClient.setInsecure();
         transport = &secureClient;
@@ -320,33 +314,106 @@ bool flashFirmware(const String &binUrl, LilyGo_Class &amoled)
     if (!http.begin(*transport, binUrl))
     {
         app_ui::displayMessage("Blad: nie moge otworzyc URL", amoled);
+        Serial.println("[OTA] http.begin(binUrl) failed");
         return false;
     }
 
-    http.setTimeout(20000);
+    http.setTimeout(60000);
+    http.useHTTP10(true);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     http.addHeader("User-Agent", GITHUB_USER_AGENT);
     int code = http.GET();
+    Serial.print("[OTA] firmware HTTP code: ");
+    Serial.println(code);
     if (code != HTTP_CODE_OK)
     {
-        app_ui::displayMessage("Blad pobierania aktualizacji", amoled);
+        String msg = "Blad pobierania:\nHTTP ";
+        msg += code;
+        app_ui::displayMessage(msg, amoled);
         http.end();
         return false;
     }
 
-    if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+    Serial.print("[OTA] content length header: ");
+    Serial.println(http.getSize());
+    Serial.print("[OTA] final download URL: ");
+    Serial.println(binUrl);
+
+    if (!Update.begin((size_t)http.getSize()))
     {
         app_ui::displayMessage("Blad: brak miejsca na OTA", amoled);
+        Serial.println("[OTA] Update.begin() failed");
         http.end();
         return false;
     }
+    Serial.println("[OTA] Update.begin() ok");
 
+    app_ui::displayMessage("Pobieram OTA...", amoled);
     WiFiClient *stream = http.getStreamPtr();
-    size_t written = Update.writeStream(*stream);
+    size_t totalBytes = (size_t)http.getSize();
+    size_t written = 0;
+    uint8_t buffer[1024];
+    unsigned int lastReportedBucket = 101;
+
+    while (http.connected() && (totalBytes == 0 || written < totalBytes))
+    {
+        size_t available = stream->available();
+        if (available == 0)
+        {
+            delay(1);
+            continue;
+        }
+
+        size_t toRead = available;
+        if (toRead > sizeof(buffer))
+        {
+            toRead = sizeof(buffer);
+        }
+
+        size_t bytesRead = stream->readBytes(buffer, toRead);
+        if (bytesRead == 0)
+        {
+            delay(1);
+            continue;
+        }
+
+        size_t bytesWritten = Update.write(buffer, bytesRead);
+        written += bytesWritten;
+
+        if (totalBytes > 0)
+        {
+            unsigned int percent = (unsigned int)((written * 100U) / totalBytes);
+            unsigned int bucket = percent / 10U;
+            if (percent == 100U || bucket != lastReportedBucket)
+            {
+                lastReportedBucket = bucket;
+                Serial.print("[OTA] progress: ");
+                Serial.print(written);
+                Serial.print("/");
+                Serial.print(totalBytes);
+                Serial.print(" (");
+                Serial.print(percent);
+                Serial.println("%)");
+
+                String msg = "Pobieram OTA...\n";
+                msg += percent;
+                msg += "%";
+                app_ui::displayMessage(msg, amoled);
+            }
+        }
+    }
+
+    Serial.print("[OTA] written bytes: ");
+    Serial.println(written);
+    Serial.print("[OTA] Update progress finished flag: ");
+    Serial.println(Update.isFinished() ? "yes" : "no");
     if (!Update.end())
     {
         String msg = "OTA blad: ";
         msg += Update.errorString();
         app_ui::displayMessage(msg, amoled);
+        Serial.print("[OTA] Update.end() failed: ");
+        Serial.println(Update.errorString());
         http.end();
         return false;
     }
@@ -354,10 +421,15 @@ bool flashFirmware(const String &binUrl, LilyGo_Class &amoled)
     if (!Update.isFinished() || written == 0)
     {
         app_ui::displayMessage("OTA nie zostala zakonczona", amoled);
+        Serial.print("[OTA] finished: ");
+        Serial.println(Update.isFinished() ? "yes" : "no");
+        Serial.print("[OTA] error string: ");
+        Serial.println(Update.errorString());
         http.end();
         return false;
     }
 
+    Serial.println("[OTA] firmware transfer completed successfully");
     http.end();
     return true;
 }
@@ -366,13 +438,21 @@ bool flashFirmware(const String &binUrl, LilyGo_Class &amoled)
 void loadSettings(UpdateSettings &settings)
 {
     preferences.begin(PREF_NAMESPACE, true);
-    settings.enabled = preferences.getBool(KEY_ENABLED, false);
-    settings.manifestUrl = preferences.getString(KEY_MANIFEST, "");
+    settings.enabled = preferences.getBool(KEY_ENABLED, true);
+    settings.manifestUrl = preferences.getString(KEY_MANIFEST, DEFAULT_UPDATE_SOURCE_URL);
     settings.assetName = preferences.getString(KEY_ASSET, DEFAULT_GITHUB_ASSET_NAME);
     preferences.end();
     settings.manifestUrl.trim();
     settings.assetName.trim();
+    if (settings.manifestUrl.length() == 0)
+    {
+        settings.manifestUrl = DEFAULT_UPDATE_SOURCE_URL;
+    }
     if (settings.assetName.length() == 0)
+    {
+        settings.assetName = DEFAULT_GITHUB_ASSET_NAME;
+    }
+    if (settings.assetName.equalsIgnoreCase("merged-firmware.bin"))
     {
         settings.assetName = DEFAULT_GITHUB_ASSET_NAME;
     }
@@ -391,6 +471,7 @@ bool checkForUpdate(LilyGo_Class &amoled)
 {
     if (WiFi.status() != WL_CONNECTED)
     {
+        Serial.println("[OTA] WiFi not connected");
         return false;
     }
 
@@ -398,29 +479,51 @@ bool checkForUpdate(LilyGo_Class &amoled)
     loadSettings(settings);
     if (!settings.enabled)
     {
+        Serial.println("[OTA] Auto-update disabled");
         return false;
     }
 
     if (settings.manifestUrl.length() == 0)
     {
         app_ui::displayMessage("Auto-update wlaczony,\nbrak adresu manifestu.", amoled);
+        Serial.println("[OTA] Missing manifest URL");
         return false;
     }
 
     app_ui::displayMessage("Sprawdzam aktualizacje...", amoled);
 
     String sourceUrl = normalizeReleaseUrl(settings.manifestUrl);
+    Serial.print("[OTA] sourceUrl: ");
+    Serial.println(sourceUrl);
+    String repoPath = extractGitHubRepoPath(sourceUrl);
 
     String manifest;
     if (!readHttpText(sourceUrl, manifest))
     {
         app_ui::displayMessage("Brak odpowiedzi\nserwera aktualizacji.", amoled);
+        Serial.println("[OTA] Manifest download failed");
         return false;
     }
+    Serial.print("[OTA] manifest bytes: ");
+    Serial.println(manifest.length());
 
     String remoteVersion = extractValue(manifest, "version");
+    String browserDownloadUrl = extractValue(manifest, "browser_download_url");
     String binUrl = extractValue(manifest, "bin_url");
-    String assetName = extractValue(manifest, "asset_name");
+    String manifestAssetName = extractValue(manifest, "asset_name");
+    String releaseTag = extractValue(manifest, "tag_name");
+    Serial.print("[OTA] version: ");
+    Serial.println(remoteVersion);
+    Serial.print("[OTA] browser_download_url: ");
+    Serial.println(browserDownloadUrl);
+    Serial.print("[OTA] bin_url: ");
+    Serial.println(binUrl);
+    Serial.print("[OTA] tag_name: ");
+    Serial.println(releaseTag);
+    if (binUrl.length() == 0 && browserDownloadUrl.length() > 0)
+    {
+        binUrl = browserDownloadUrl;
+    }
     if (binUrl.length() == 0)
     {
         binUrl = extractValue(manifest, "firmware_url");
@@ -432,34 +535,54 @@ bool checkForUpdate(LilyGo_Class &amoled)
 
     if (remoteVersion.length() == 0 || binUrl.length() == 0)
     {
-        remoteVersion = extractValue(manifest, "tag_name");
-        if (remoteVersion.length() == 0)
+        if (releaseTag.length() == 0)
         {
-            remoteVersion = extractValue(manifest, "name");
+            releaseTag = extractValue(manifest, "name");
         }
-        if (assetName.length() == 0)
+        remoteVersion = releaseTag;
+        String expectedAssetName = manifestAssetName.length() > 0 ? manifestAssetName : settings.assetName;
+        if (expectedAssetName.length() == 0)
         {
-            assetName = settings.assetName;
+            expectedAssetName = DEFAULT_GITHUB_ASSET_NAME;
         }
-        binUrl = extractGithubAssetUrl(manifest, assetName.length() ? assetName : DEFAULT_GITHUB_ASSET_NAME);
+        binUrl = buildGitHubAssetUrl(repoPath, releaseTag, expectedAssetName);
+        Serial.print("[OTA] derived version from tag_name: ");
+        Serial.println(remoteVersion);
     }
 
     remoteVersion = trimVersionToken(remoteVersion);
     binUrl.trim();
-    assetName.trim();
+    Serial.print("[OTA] normalized version: ");
+    Serial.println(remoteVersion);
+    Serial.print("[OTA] final binUrl: ");
+    Serial.println(binUrl);
 
     if (remoteVersion.length() == 0 || binUrl.length() == 0)
     {
-        app_ui::displayMessage("Niepoprawny manifest\naktualizacji.", amoled);
+        String msg = "Brak assetu:\n";
+        msg += settings.assetName.length() > 0 ? settings.assetName : DEFAULT_GITHUB_ASSET_NAME;
+        app_ui::displayMessage(msg, amoled);
+        Serial.println("[OTA] Missing version or bin URL");
         return false;
     }
 
-    if (compareVersions(APP_VERSION, remoteVersion) >= 0)
+    String debugMsg = "Tag: ";
+    debugMsg += remoteVersion;
+    debugMsg += "\nAsset: ";
+    debugMsg += settings.assetName.length() > 0 ? settings.assetName : DEFAULT_GITHUB_ASSET_NAME;
+    app_ui::displayMessage(debugMsg, amoled);
+    delay(700);
+    Serial.print("[OTA] APP_VERSION: ");
+    Serial.println(APP_VERSION);
+
+    // compareVersions() returns > 0 when the remote version is newer.
+    if (compareVersions(APP_VERSION, remoteVersion) <= 0)
     {
         String msg = "Aktualna wersja\n";
         msg += APP_VERSION;
         msg += " jest OK";
         app_ui::displayMessage(msg, amoled);
+        Serial.println("[OTA] Current version is up to date");
         return false;
     }
 
@@ -470,10 +593,12 @@ bool checkForUpdate(LilyGo_Class &amoled)
 
     if (!flashFirmware(binUrl, amoled))
     {
+        Serial.println("[OTA] Flash failed");
         return false;
     }
 
     app_ui::displayMessage("Aktualizacja OK.\nRestart...", amoled);
+    Serial.println("[OTA] Flash OK, restarting");
     delay(1200);
     ESP.restart();
     return true;

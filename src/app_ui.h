@@ -14,8 +14,6 @@ void showSplashScreen(LilyGo_Class &amoled);
 void initializeDeltaHistory();
 void clearDeltaDisplay();
 void initializeBatteryStatus();
-void initializeUpdateControls();
-bool takeManualUpdateRequest();
 void renderBatteryStatus(const battery_status::BatterySnapshot &battery);
 void renderTelemetryWaiting();
 void renderTelemetryDashboard(const TelemetryViewData &view);

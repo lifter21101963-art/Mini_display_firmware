@@ -30,5 +30,7 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: .pio/build/t-display-amoled/merged-firmware.bin
+          files: |
+            .pio/build/t-display-amoled/firmware.bin
+            .pio/build/t-display-amoled/merged-firmware.bin
           generate_release_notes: true
