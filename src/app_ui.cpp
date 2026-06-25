@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <math.h>
 #include "ui.h"
+#include "version.h"
 
 extern const lv_img_dsc_t logo;
 
@@ -284,8 +285,17 @@ void showSplashScreen(LilyGo_Class &amoled)
     lv_obj_t *splash = lv_img_create(lv_scr_act());
     lv_img_set_src(splash, &logo);
     lv_obj_align(splash, LV_ALIGN_CENTER, 0, 0);
+
+    lv_obj_t *versionLabel = lv_label_create(lv_scr_act());
+    lv_label_set_text_fmt(versionLabel, "v%s", APP_VERSION);
+    lv_obj_set_style_text_font(versionLabel, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(versionLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(versionLabel, 180, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(versionLabel, LV_ALIGN_BOTTOM_LEFT, 8, -6);
+
     lv_task_handler();
     delay(2000);
+    lv_obj_del(versionLabel);
     lv_obj_del(splash);
     lv_task_handler();
 }
