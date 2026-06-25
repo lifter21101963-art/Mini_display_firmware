@@ -19,7 +19,8 @@ Projekt ma teraz prosty mechanizm automatycznych aktualizacji firmware po Wi-Fi.
 - Domyślnie portal już ma wpisane Twoje repozytorium GitHub, a urządzenie samo przejdzie do `releases/latest`.
 - Manifest może być JSON-em albo prostym tekstem z polami `version=` i `bin_url=`.
 - Gdy urządzenie wykryje nowszą wersję, pobierze binarkę i wykona restart po udanym OTA.
-- Domyślna nazwa assetu w GitHub Release to `merged-firmware.bin`.
+- Domyślna nazwa assetu OTA w GitHub Release to `firmware.bin`.
+- `merged-firmware.bin` zostaje tylko jako plik do pełnego flashowania.
 
 Przykład dla GitHub Releases:
 
@@ -40,7 +41,8 @@ git tag v0.2.6
 git push origin v0.2.6
 ```
 
-Workflow opublikuje release z plikiem `merged-firmware.bin`.
+Workflow opublikuje release z tym samym firmware pod dwiema nazwami:
+`firmware.bin` oraz `merged-firmware.bin`.
 
 Przykład prostego manifestu:
 

@@ -160,6 +160,10 @@ namespace portal
         {
             updateSettings.assetName = update_manager::DEFAULT_UPDATE_ASSET_NAME;
         }
+        if (updateSettings.assetName.equalsIgnoreCase("merged-firmware.bin"))
+        {
+            updateSettings.assetName = update_manager::DEFAULT_UPDATE_ASSET_NAME;
+        }
         update_manager::saveSettings(updateSettings);
 
         String resp = html_head;

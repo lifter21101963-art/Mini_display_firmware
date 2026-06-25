@@ -19,7 +19,7 @@ constexpr char KEY_MANIFEST[] = "manifest";
 constexpr char KEY_ASSET[] = "asset";
 constexpr size_t MAX_MANIFEST_URL_LEN = 240;
 constexpr char GITHUB_USER_AGENT[] = "GT7_V2_Project";
-constexpr char DEFAULT_GITHUB_ASSET_NAME[] = "merged-firmware.bin";
+constexpr char DEFAULT_OTA_ASSET_NAME[] = "firmware.bin";
 
 Preferences preferences;
 
@@ -440,7 +440,7 @@ void loadSettings(UpdateSettings &settings)
     preferences.begin(PREF_NAMESPACE, true);
     settings.enabled = preferences.getBool(KEY_ENABLED, true);
     settings.manifestUrl = preferences.getString(KEY_MANIFEST, DEFAULT_UPDATE_SOURCE_URL);
-    settings.assetName = preferences.getString(KEY_ASSET, DEFAULT_GITHUB_ASSET_NAME);
+    settings.assetName = preferences.getString(KEY_ASSET, DEFAULT_OTA_ASSET_NAME);
     preferences.end();
     settings.manifestUrl.trim();
     settings.assetName.trim();
@@ -450,11 +450,11 @@ void loadSettings(UpdateSettings &settings)
     }
     if (settings.assetName.length() == 0)
     {
-        settings.assetName = DEFAULT_GITHUB_ASSET_NAME;
+        settings.assetName = DEFAULT_OTA_ASSET_NAME;
     }
     if (settings.assetName.equalsIgnoreCase("merged-firmware.bin"))
     {
-        settings.assetName = DEFAULT_GITHUB_ASSET_NAME;
+        settings.assetName = DEFAULT_OTA_ASSET_NAME;
     }
 }
 
@@ -523,7 +523,7 @@ bool checkForUpdate(LilyGo_Class &amoled)
     String desiredAssetName = manifestAssetName.length() > 0 ? manifestAssetName : settings.assetName;
     if (desiredAssetName.length() == 0)
     {
-        desiredAssetName = DEFAULT_GITHUB_ASSET_NAME;
+        desiredAssetName = DEFAULT_OTA_ASSET_NAME;
     }
 
     if (binUrl.length() == 0 && browserDownloadUrl.length() > 0)
@@ -572,7 +572,7 @@ bool checkForUpdate(LilyGo_Class &amoled)
     if (remoteVersion.length() == 0 || binUrl.length() == 0)
     {
         String msg = "Brak assetu:\n";
-        msg += settings.assetName.length() > 0 ? settings.assetName : DEFAULT_GITHUB_ASSET_NAME;
+        msg += settings.assetName.length() > 0 ? settings.assetName : DEFAULT_OTA_ASSET_NAME;
         app_ui::displayMessage(msg, amoled);
         Serial.println("[OTA] Missing version or bin URL");
         return false;
@@ -581,7 +581,7 @@ bool checkForUpdate(LilyGo_Class &amoled)
     String debugMsg = "Tag: ";
     debugMsg += remoteVersion;
     debugMsg += "\nAsset: ";
-    debugMsg += settings.assetName.length() > 0 ? settings.assetName : DEFAULT_GITHUB_ASSET_NAME;
+    debugMsg += settings.assetName.length() > 0 ? settings.assetName : DEFAULT_OTA_ASSET_NAME;
     app_ui::displayMessage(debugMsg, amoled);
     delay(700);
     Serial.print("[OTA] APP_VERSION: ");

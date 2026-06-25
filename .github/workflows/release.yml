@@ -27,6 +27,9 @@ jobs:
       - name: Build firmware
         run: python -m platformio run
 
+      - name: Duplicate firmware for release
+        run: cp .pio/build/t-display-amoled/firmware.bin .pio/build/t-display-amoled/merged-firmware.bin
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
