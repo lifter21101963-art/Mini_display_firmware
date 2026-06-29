@@ -37,8 +37,8 @@ Repo ma workflow, który przy tagu `v*` buduje firmware i publikuje GitHub Relea
 Przykład:
 
 ```text
-git tag v0.2.6
-git push origin v0.2.6
+git tag v0.2.9
+git push origin v0.2.9
 ```
 
 Workflow opublikuje release z tym samym firmware pod dwiema nazwami:
@@ -59,8 +59,16 @@ PlatformIO dla wyświetlacza LilyGO AMOLED.
 
 ## Pozycja XYZ na PC
 
-ESP32 wysyła teraz pozycję auta `x/y/z` przez UDP broadcast na port `5005`.
-Na PC uruchom lokalny serwer:
+ESP32 wysyła pozycję auta `x/y/z` jako JSON przez UDP do hosta
+`gt7positions.duckdns.org` na port `5005`.
+
+Przykładowy pakiet:
+
+```text
+{"x":12.345,"y":0.000,"z":67.890,"mac":"AA:BB:CC:DD:EE:FF"}
+```
+
+Na PC uruchom lokalny serwer, który nasłuchuje na UDP `5005` i wyświetla dane w przeglądarce:
 
 ```text
 python pc_position_server.py
