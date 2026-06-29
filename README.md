@@ -47,7 +47,7 @@ Workflow opublikuje release z tym samym firmware pod dwiema nazwami:
 Przykład prostego manifestu:
 
 ```text
-version=0.2.6
+version=0.2.9
 bin_url=https://twoj-serwer.pl/gt7_v2_project/firmware.bin
 ```
 
