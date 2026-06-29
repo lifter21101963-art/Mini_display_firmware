@@ -11,6 +11,7 @@
 #include "update_manager.h"
 #include "telemetry_parsing.h"
 #include "telemetry_processor.h"
+#include "telemetry_sender.h"
 #include "wind_heading.h"
 
 constexpr int CALIB_BUTTON = 0; // GPIO0 / BOOT
@@ -52,6 +53,7 @@ void setup()
     portal::connectWiFiWithUI(amoled);
     update_manager::checkForUpdate(amoled);
     delay(500);
+    telemetry_sender::begin();
 
     IPAddress psIP;
     while (psIP == IPAddress(0, 0, 0, 0))
@@ -77,6 +79,7 @@ void loop()
 
     Packet packetContent = gt7Telem.readData();
     telemetry_parsing::TelemetryFrame frame = telemetry_parsing::parseTelemetryFrame(packetContent);
+    telemetry_sender::updatePosition(frame.position[0], frame.position[1], frame.position[2]);
 
     float azimuth = wind_heading::quaternionToAzimuth(
         frame.rotation[0],
@@ -93,6 +96,7 @@ void loop()
 
     wind_heading::updateArrow(windState, azimuth);
     telemetry::processTelemetryFrame(frame);
+    telemetry_sender::handle();
 
     if (millis() - previousBatteryStatusMs >= BATTERY_STATUS_INTERVAL_MS)
     {

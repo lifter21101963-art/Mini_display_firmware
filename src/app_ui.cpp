@@ -288,13 +288,19 @@ void showSplashScreen(LilyGo_Class &amoled)
 
     lv_obj_t *versionLabel = lv_label_create(lv_scr_act());
     lv_label_set_text_fmt(versionLabel, "v%s", APP_VERSION);
-    lv_obj_set_style_text_font(versionLabel, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(versionLabel, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_color(versionLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(versionLabel, 180, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_align(versionLabel, LV_ALIGN_BOTTOM_LEFT, 8, -6);
+    lv_obj_set_style_text_opa(versionLabel, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(versionLabel, lv_color_hex(0x111111), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(versionLabel, 220, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_radius(versionLabel, 8, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_hor(versionLabel, 12, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_ver(versionLabel, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(versionLabel, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_move_foreground(versionLabel);
 
     lv_task_handler();
-    delay(2000);
+    delay(2500);
     lv_obj_del(versionLabel);
     lv_obj_del(splash);
     lv_task_handler();

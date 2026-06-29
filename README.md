@@ -56,3 +56,21 @@ bin_url=https://twoj-serwer.pl/gt7_v2_project/firmware.bin
 W bieżących plikach rozbudowano live delta timing, poprawiono prezentację delty w UI,
 dodano dokładniejsze liczenie paliwa na okrążenie oraz zaktualizowano konfigurację
 PlatformIO dla wyświetlacza LilyGO AMOLED.
+
+## Pozycja XYZ na PC
+
+ESP32 wysyła teraz pozycję auta `x/y/z` przez UDP broadcast na port `5005`.
+Na PC uruchom lokalny serwer:
+
+```text
+python pc_position_server.py
+```
+
+Następnie otwórz w przeglądarce:
+
+```text
+http://localhost:8000
+```
+
+Serwer PC odbiera dane z ESP i pokazuje je na stronie jako trzy wartości `X`, `Y`, `Z`.
+Na stronie widoczny jest też `MAC` urządzenia wysyłającego dane.
