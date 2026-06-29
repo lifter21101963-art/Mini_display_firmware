@@ -11,7 +11,9 @@ constexpr float FUEL_SAMPLE_MIN = 0.10f;
 constexpr float FUEL_SAMPLE_MAX = 100.0f;
 constexpr float REFUEL_DETECT_THRESHOLD = 2.0f;
 constexpr float EMA_ALPHA = 0.30f;
-constexpr unsigned long FUEL_LAP_MIN_MS = 30000UL;
+constexpr unsigned long FUEL_LAP_MIN_MS = 5000UL;
+constexpr float FUEL_DROP_REJECT_RATIO = 0.40f;
+constexpr int FUEL_DROP_CONFIRM_FRAMES = 3;
 
 float roundToTwoDecimals(float value)
 {
@@ -22,7 +24,51 @@ void setLapBaseline(FuelState &state, float fuelLevel)
 {
     state.lapStartFuel = fuelLevel;
     state.lastFuelLevel = fuelLevel;
+    state.lastStableFuelLevel = fuelLevel;
+    state.suspiciousFuelFrames = 0;
     state.lapStartMs = millis();
+}
+
+float sanitizeFuelLevel(FuelState &state, float fuelLevel)
+{
+    if (fuelLevel < 0.0f)
+    {
+        return fuelLevel;
+    }
+
+    if (state.lastStableFuelLevel < 0.0f)
+    {
+        state.lastStableFuelLevel = fuelLevel;
+        state.suspiciousFuelFrames = 0;
+        return fuelLevel;
+    }
+
+    bool suspiciousDrop = false;
+    if (state.lastStableFuelLevel > 0.1f && fuelLevel <= 0.01f)
+    {
+        suspiciousDrop = true;
+    }
+    else if (state.lastStableFuelLevel > 0.1f && fuelLevel < state.lastStableFuelLevel * FUEL_DROP_REJECT_RATIO)
+    {
+        suspiciousDrop = true;
+    }
+
+    if (suspiciousDrop)
+    {
+        if (state.suspiciousFuelFrames + 1 < FUEL_DROP_CONFIRM_FRAMES)
+        {
+            state.suspiciousFuelFrames++;
+            return state.lastStableFuelLevel;
+        }
+
+        state.suspiciousFuelFrames = 0;
+        state.lastStableFuelLevel = fuelLevel;
+        return fuelLevel;
+    }
+
+    state.suspiciousFuelFrames = 0;
+    state.lastStableFuelLevel = fuelLevel;
+    return fuelLevel;
 }
 
 void updateAverageLapTime(FuelState &state, unsigned long lapTimeMs)
@@ -94,6 +140,8 @@ void reset(FuelState &state)
 {
     state.lapStartFuel = -1.0f;
     state.lastFuelLevel = -1.0f;
+    state.lastStableFuelLevel = -1.0f;
+    state.suspiciousFuelFrames = 0;
     state.fuelPerLap = 0.0f;
     state.lapSampleCount = 0;
     state.lapStartMs = 0;
@@ -103,10 +151,14 @@ void reset(FuelState &state)
 
 void beginLap(FuelState &state, float fuelLevel)
 {
-    if (fuelLevel >= 0.0f)
+    if (fuelLevel > FUEL_SAMPLE_MIN)
     {
-        setLapBaseline(state, fuelLevel);
-        state.refueling = false;
+        float stableFuelLevel = sanitizeFuelLevel(state, fuelLevel);
+        if (stableFuelLevel > FUEL_SAMPLE_MIN)
+        {
+            setLapBaseline(state, stableFuelLevel);
+            state.refueling = false;
+        }
     }
 }
 
@@ -117,9 +169,14 @@ void update(FuelState &state, float fuelLevel)
         return;
     }
 
+    fuelLevel = sanitizeFuelLevel(state, fuelLevel);
+
     if (state.lapStartFuel < 0.0f)
     {
-        setLapBaseline(state, fuelLevel);
+        if (fuelLevel > FUEL_SAMPLE_MIN)
+        {
+            setLapBaseline(state, fuelLevel);
+        }
         return;
     }
 
@@ -149,9 +206,14 @@ void onLapChange(FuelState &state, float fuelAfter, int lapDelta, int lapTimeMs)
         return;
     }
 
+    fuelAfter = sanitizeFuelLevel(state, fuelAfter);
+
     if (state.lapStartFuel < 0.0f)
     {
-        setLapBaseline(state, fuelAfter);
+        if (fuelAfter > FUEL_SAMPLE_MIN)
+        {
+            setLapBaseline(state, fuelAfter);
+        }
         return;
     }
 
@@ -189,6 +251,11 @@ void onLapChange(FuelState &state, float fuelAfter, int lapDelta, int lapTimeMs)
 FuelSnapshot evaluate(const FuelState &state, float fuelLevel, float fuelCapacity)
 {
     FuelSnapshot snapshot{};
+
+    if (fuelLevel >= 0.0f && state.lastStableFuelLevel > 0.0f && fuelLevel <= 0.01f)
+    {
+        fuelLevel = state.lastStableFuelLevel;
+    }
 
     if (fuelCapacity > 0.01f)
     {

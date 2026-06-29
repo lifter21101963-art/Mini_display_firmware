@@ -17,7 +17,8 @@ bool haveLastLapCount = false;
 
 bool isRaceFinished(const telemetry_parsing::TelemetryFrame &frame)
 {
-    return frame.totalLaps > 0 && frame.lapCount >= frame.totalLaps;
+    // GT7 reports the current lap number; the final lap is still live when lapCount == totalLaps.
+    return frame.totalLaps > 0 && frame.lapCount > frame.totalLaps;
 }
 } // namespace
 

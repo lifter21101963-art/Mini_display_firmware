@@ -7,6 +7,8 @@ struct FuelState
 {
     float lapStartFuel = -1.0f;
     float lastFuelLevel = -1.0f;
+    float lastStableFuelLevel = -1.0f;
+    int suspiciousFuelFrames = 0;
     float fuelPerLap = 0.0f;
     int lapSampleCount = 0;
     unsigned long lapStartMs = 0;
